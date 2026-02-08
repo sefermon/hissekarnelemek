@@ -3,37 +3,33 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Borsa Karne", page_icon="📈", layout="centered")
 
-# --- BAŞLIK ALANI (Google Tarzı) ---
+# --- BAŞLIK ALANI ---
 st.markdown("<h1 style='text-align: center; color: #0068c9;'>📈 Borsa Karneleyici</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>Hisse kodunu gir, saniyeler içinde Z-Score ve Bilanço Analizini gör.</p>", unsafe_allow_html=True)
 
-st.write("") # Boşluk
-st.write("") # Boşluk
+st.write("") 
 
-# --- ARAMA ALANI (ANA EKRAN) ---
-# Arama kutusu ve butonu yan yana koymak için kolon kullanıyoruz
+# --- ARAMA ALANI ---
 col1, col2 = st.columns([3, 1]) 
-
 with col1:
     hisse_kodu_giris = st.text_input("Hisse Kodu", value="", placeholder="Örn: GZNMI, THYAO, AAPL", label_visibility="collapsed").upper()
-
 with col2:
-    # Butonu kutuyla hizalamak için biraz boşluk bırakıyoruz
     analiz_butonu = st.button("Analiz Et 🚀", type="primary", use_container_width=True)
 
-st.divider() # Araya şık bir çizgi
+st.divider()
 
 class StreamlitHisseAnaliz:
     def __init__(self, hisse_kodu):
         self.hisse_kodu_saf = hisse_kodu
         self.symbol = ""
         self.currency = "TL"
+        self.son_bilanco_tarihi = "Bilinmiyor"
         
-        # Kullanıcı boş basarsa işlem yapma
         if not hisse_kodu:
             st.warning("Lütfen bir hisse kodu girin.")
             self.hisse = None
@@ -43,14 +39,12 @@ class StreamlitHisseAnaliz:
             try:
                 try_bist = f"{hisse_kodu}.IS"
                 hisse_bist = yf.Ticker(try_bist)
-                # BIST kontrolü
                 if not hisse_bist.history(period="5d").empty:
                     self.hisse = hisse_bist
                     self.symbol = try_bist
                     self.currency = "TRY"
                     st.toast(f"✅ BIST Hissesi: {try_bist}", icon="🇹🇷")
                 else:
-                    # Global kontrol
                     hisse_global = yf.Ticker(hisse_kodu)
                     if not hisse_global.history(period="5d").empty:
                         self.hisse = hisse_global
@@ -65,6 +59,14 @@ class StreamlitHisseAnaliz:
                 self.bs = self.hisse.balance_sheet
                 self.is_ = self.hisse.financials
                 self.info = self.hisse.info
+                
+                # SON BİLANÇO TARİHİNİ BULMA
+                # Balance Sheet sütun başlıkları genelde tarih objesidir
+                if not self.bs.empty:
+                    tarih_obj = self.bs.columns[0] # En güncel sütun
+                    self.son_bilanco_tarihi = tarih_obj.strftime("%d.%m.%Y")
+                else:
+                    self.son_bilanco_tarihi = "Veri Yok"
 
             except Exception as e:
                 st.error(f"Bağlantı Hatası: {e}")
@@ -182,36 +184,31 @@ class StreamlitHisseAnaliz:
         if basarili: self.puan += 1
 
     def rapor_olustur(self):
-        # ÜST BİLGİ KARTLARI
+        # ÜST BİLGİLER
         st.write("")
         col1, col2 = st.columns(2)
         col1.metric("Genel Puan", f"{self.puan} / {self.toplam_mumkun_puan}")
         
-        z_renk = "off"
         if self.z_score < 1.1: z_delta = "- Riskli"
         elif self.z_score > 2.6: z_delta = "+ Güvenli"
         else: z_delta = "İzle"
-        
         col2.metric("Altman Z-Score", f"{self.z_score:.2f}", z_delta)
 
         # TABLO
         st.subheader(f"📊 {self.hisse_kodu_saf} Analiz Raporu")
-        
-        # DataFrame ile renkli tablo
         df = pd.DataFrame(self.kriterler)
         def renk_ver(val):
             return 'background-color: #d1e7dd; color: black' if val in ["BAŞARILI", "UCUZ"] else 'background-color: #f8d7da; color: black'
-
-        st.dataframe(
-            df.style.applymap(renk_ver, subset=['Durum']),
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(df.style.applymap(renk_ver, subset=['Durum']), use_container_width=True, hide_index=True)
         
-        # KARNE GÖRSELİ
-        self.detayli_karne_ciz()
+        # TARİH BİLGİLERİ (WEB)
+        bugun = datetime.now().strftime("%d.%m.%Y")
+        st.caption(f"📅 **Analiz Tarihi:** {bugun} | 🧾 **Veri Kaynağı (Son Bilanço):** {self.son_bilanco_tarihi}")
+        
+        # GÖRSEL KARNE
+        self.detayli_karne_ciz(bugun)
 
-    def detayli_karne_ciz(self):
+    def detayli_karne_ciz(self, bugun):
         data = []
         renkler = []
         headers = ["KRİTER", "DEĞER", "HEDEF", "DURUM"]
@@ -222,19 +219,21 @@ class StreamlitHisseAnaliz:
             if k['Durum'] in ["BAŞARILI", "UCUZ"]: renkler.append(["#d4edda"] * 4) 
             else: renkler.append(["#f8d7da"] * 4) 
 
-        fig, ax = plt.subplots(figsize=(10, len(data) * 0.5 + 1.5))
+        fig, ax = plt.subplots(figsize=(10, len(data) * 0.5 + 2))
         ax.axis('off')
         
-        # Başlık ve Tablo
-        table = ax.table(cellText=data, colLabels=headers, cellColours=renkler, loc='center', cellLoc='center', bbox=[0, 0, 1, 1])
+        table = ax.table(cellText=data, colLabels=headers, cellColours=renkler, loc='center', cellLoc='center', bbox=[0, 0.1, 1, 0.9])
         table.auto_set_font_size(False); table.set_fontsize(10)
         
-        # Header Stili
         for (row, col), cell in table.get_celld().items():
             if row == 0:
                 cell.set_text_props(weight='bold', color='white')
                 cell.set_facecolor('#333333')
         
+        # GÖRSELİN ALTINA İMZA VE TARİH EKLEME
+        plt.figtext(0.5, 0.05, f"Analiz Tarihi: {bugun} | Bilanço Dönemi: {self.son_bilanco_tarihi}", ha="center", fontsize=9, color="gray")
+        plt.figtext(0.5, 0.02, "Powered by BorsaKarne", ha="center", fontsize=8, color="#0068c9", weight="bold")
+
         st.pyplot(fig)
 
 # --- ÇALIŞTIR ---
