@@ -186,26 +186,35 @@ class StreamlitHisseAnaliz:
         st.write("")
         col1, col2 = st.columns(2)
         
-        # SOL: Genel Puan
         col1.metric("Genel Puan", f"{self.puan} / {self.toplam_mumkun_puan}")
         
-        # SAĞ: Altman Z-Score
         if self.z_score < 1.1: z_delta = "- Riskli"
         elif self.z_score > 2.6: z_delta = "+ Güvenli"
         else: z_delta = "İzle"
         col2.metric("Altman Z-Score", f"{self.z_score:.2f}", z_delta)
         
-        # --- YENİ EKLENEN AÇIKLAMA (EXPANDER) ---
+        # --- Z-SCORE DETAYLI AÇIKLAMA ---
         with col2:
-            with st.expander("Z-Score Nedir?"):
+            with st.expander("Z-Score Nedir ve Nasıl Hesaplanır?"):
                 st.markdown("""
-                **Altman Z-Skor**, iflas riskini ölçen bir formüldür.
+                **Altman Z-Skor**, şirketin iflas riskini ölçen bir formüldür.
                 
-                - 🟢 **> 2.60 (Güvenli):** İflas riski düşük.
-                - 🟡 **1.10 - 2.60 (Gri):** Risk artıyor, izlenmeli.
+                **Formül Bileşenleri:**
+                - **(T1) Likidite:** İşletme Sermayesi / Toplam Varlıklar
+                  *(Şirketin kısa vadeli borç ödeme gücü)*
+                - **(T2) Birikmiş Kâr:** Geçmiş Yıl Kârları / Toplam Varlıklar
+                  *(Şirketin yıllar içinde biriktirdiği kâr)*
+                - **(T3) Faaliyet Verimliliği:** FAVÖK / Toplam Varlıklar
+                  *(Varlıkların ne kadar operasyonel kâr ürettiği)*
+                - **(T4) Finansal Yapı:** Özkaynak / Toplam Yükümlülükler
+                  *(Şirketin borca batıklık durumu)*
+                
+                **Risk Bölgeleri:**
+                - 🟢 **> 2.60 (Güvenli):** Finansal yapı sağlam.
+                - 🟡 **1.10 - 2.60 (Gri):** Dikkatli olunmalı.
                 - 🔴 **< 1.10 (Riskli):** İflas riski yüksek.
                 """)
-        # ----------------------------------------
+        # --------------------------------
 
         # TABLO
         st.subheader(f"📊 {self.hisse_kodu_saf} Analiz Raporu")
@@ -246,4 +255,9 @@ class StreamlitHisseAnaliz:
         plt.figtext(0.5, 0.05, f"Analiz Tarihi: {bugun} | Bilanço Dönemi: {self.son_bilanco_tarihi}", ha="center", fontsize=9, color="gray")
         plt.figtext(0.5, 0.02, "Powered by BorsaKarne", ha="center", fontsize=8, color="#0068c9", weight="bold")
 
-        st.pyplot(fig
+        st.pyplot(fig)
+
+# --- ÇALIŞTIR ---
+if analiz_butonu:
+    app = StreamlitHisseAnaliz(hisse_kodu_giris)
+    app.analiz_yap()
