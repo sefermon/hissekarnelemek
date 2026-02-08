@@ -23,7 +23,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- BAŞLIK ---
-st.markdown("<h1 style='text-align: center; color: #0068c9;'>📈 Canlı Borsa Karnesi</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #0068c9;'>📈 Sefer Mesut - Borsa Analiz</h1>", unsafe_allow_html=True)
 st.caption("En güncel ÇEYREKLİK verilerle analiz yapar. (Kaynak: Yahoo Finance)")
 
 st.write("") 
@@ -72,8 +72,7 @@ class StreamlitHisseAnaliz:
                         self.hisse = None
                         return
 
-                # --- KRİTİK DEĞİŞİKLİK: ÇEYREKLİK VERİLERİ ÇEKİYORUZ ---
-                # Annual (Yıllık) yerine Quarterly (Çeyreklik) kullanıyoruz
+                # ÇEYREKLİK VERİLERİ ÇEKİYORUZ
                 self.bs = self.hisse.quarterly_balance_sheet
                 self.is_ = self.hisse.quarterly_financials
                 self.info = self.hisse.info
@@ -95,13 +94,11 @@ class StreamlitHisseAnaliz:
         self.z_score = 0
 
     def veri_getir(self, df, kalem_listesi, sutun_idx=0):
-        """Belirtilen sütundaki (0=En yeni, 1=Bir önceki vb.) veriyi çeker"""
         if df.empty or len(df.columns) <= sutun_idx:
             return 0.0
-            
         for kalem in kalem_listesi:
             if kalem in df.index:
-                val = df.iloc[:, sutun_idx].loc[kalem] # İlgili sütun ve satır
+                val = df.iloc[:, sutun_idx].loc[kalem]
                 return float(val) if pd.notnull(val) else 0.0
         return 0.0
 
@@ -110,21 +107,15 @@ class StreamlitHisseAnaliz:
         
         try:
             # --- VERİLERİ TOPLA (ÇEYREKLİK) ---
-            # Sütun 0: En Son Çeyrek (Örn: 2025/9)
-            # Sütun 4: Geçen Yılın Aynı Çeyreği (Örn: 2024/9) -> Büyüme Hesabı İçin İdeal
-            
-            # GELİR TABLOSU
             satislar_guncel = self.veri_getir(self.is_, ['Total Revenue', 'Operating Revenue'], 0)
-            satislar_gecen_yil_ceyrek = self.veri_getir(self.is_, ['Total Revenue'], 4) # YoY Growth
+            satislar_gecen_yil_ceyrek = self.veri_getir(self.is_, ['Total Revenue'], 4) 
             
             ebitda_guncel = self.veri_getir(self.is_, ['EBITDA', 'Normalized EBITDA'], 0)
             if ebitda_guncel == 0: ebitda_guncel = self.veri_getir(self.is_, ['Operating Income'], 0)
-            
             ebitda_gecen_yil_ceyrek = self.veri_getir(self.is_, ['EBITDA'], 4)
             
             net_kar = self.veri_getir(self.is_, ['Net Income', 'Net Income Common Stockholders'], 0)
             
-            # BİLANÇO (Snapshot olduğu için en günceline bakılır)
             donen_varliklar = self.veri_getir(self.bs, ['Current Assets', 'Total Current Assets'], 0)
             kisa_vadeli_yuk = self.veri_getir(self.bs, ['Current Liabilities', 'Total Current Liabilities'], 0)
             toplam_varliklar = self.veri_getir(self.bs, ['Total Assets'], 0)
@@ -137,28 +128,24 @@ class StreamlitHisseAnaliz:
             isletme_sermayesi = donen_varliklar - kisa_vadeli_yuk
             kaldirac = toplam_yukumluluk / toplam_varliklar if toplam_varliklar else 0
             
-            # BÜYÜME HESABI (Bu Çeyrek vs Geçen Yıl Aynı Çeyrek)
             satis_buyume = (satislar_guncel - satislar_gecen_yil_ceyrek) / satislar_gecen_yil_ceyrek if satislar_gecen_yil_ceyrek else 0
             favok_buyume = (ebitda_guncel - ebitda_gecen_yil_ceyrek) / abs(ebitda_gecen_yil_ceyrek) if ebitda_gecen_yil_ceyrek else 0
             
-            # DEĞERLEME
             pd_dd = self.info.get('priceToBook')
             if pd_dd is None:
                 piyasa_deg = self.info.get('marketCap', 0)
                 if piyasa_deg > 0 and ozkaynaklar > 0: pd_dd = piyasa_deg / ozkaynaklar
                 else: pd_dd = 0
 
-            # ROE (Yıllıklandırılmış Net Kar ile hesaplamak daha doğru ama basitlik için Çeyreklik x 4 yapabiliriz veya direkt TTM kullanırız)
-            # Burada basitlik adına: Çeyreklik Net Kar / Özkaynak * 4 (Kabaca Yıllık ROE Tahmini)
+            # Tahmini Yıllık ROE (Çeyreklik x 4)
             roe = (net_kar * 4) / ozkaynaklar if ozkaynaklar else 0
             adil_pd_dd = roe * 10 
             
-            # --- PUANLAMA (Kriterleri Çeyreklik Veriye Göre Güncelledik) ---
-            # Enflasyonist ortamda Çeyreklik Ciro Büyümesi (YoY) beklentisi %50+ olabilir
-            self.kriter_ekle("Satış Büyümesi (Çeyreklik Yıllıklandırılmış)", satis_buyume, 0.40, "BÜYÜME", format_tur="yuzde")
-            self.kriter_ekle("FAVÖK Büyümesi (Çeyreklik Yıllıklandırılmış)", favok_buyume, 0.30, "BÜYÜME", format_tur="yuzde")
+            # --- PUANLAMA ---
+            self.kriter_ekle("Satış Büyümesi (Çeyreklik)", satis_buyume, 0.40, "BÜYÜME", format_tur="yuzde")
+            self.kriter_ekle("FAVÖK Büyümesi (Çeyreklik)", favok_buyume, 0.30, "BÜYÜME", format_tur="yuzde")
             self.kriter_ekle("Net Kâr (Son Çeyrek)", net_kar, 0, "KARLILIK", format_tur="sayi")
-            self.kriter_ekle("Tahmini Yıllık ROE", roe, 0.30, "KARLILIK", format_tur="yuzde") 
+            self.kriter_ekle("Yıllıklandırılmış ROE", roe, 0.30, "KARLILIK", format_tur="yuzde") 
             self.kriter_ekle("Cari Oran (> 1.20)", cari_oran, 1.20, "SAĞLIK", format_tur="sayi")
             self.kriter_ekle("Kaldıraç Oranı (< %75)", kaldirac, 0.75, "RİSK", ters=True, format_tur="yuzde")
             
@@ -173,10 +160,10 @@ class StreamlitHisseAnaliz:
             if degerleme_durumu: self.puan += 1
             self.toplam_mumkun_puan += 1
 
-            # --- Z-SCORE HESABI ---
+            # --- Z-SCORE ---
             t1 = isletme_sermayesi / toplam_varliklar if toplam_varliklar else 0
             t2 = gecmis_yil_karlari / toplam_varliklar if toplam_varliklar else 0
-            t3 = (ebitda_guncel * 4) / toplam_varliklar if toplam_varliklar else 0 # FAVÖK'ü yıllıklandır
+            t3 = (ebitda_guncel * 4) / toplam_varliklar if toplam_varliklar else 0
             t4 = ozkaynaklar / toplam_yukumluluk if toplam_yukumluluk else 0
             self.z_score = (6.56 * t1) + (3.26 * t2) + (6.72 * t3) + (1.05 * t4)
 
@@ -235,8 +222,7 @@ class StreamlitHisseAnaliz:
         st.dataframe(df.style.applymap(renk_ver, subset=['Durum']), use_container_width=True, hide_index=True)
         
         bugun = datetime.now().strftime("%d.%m.%Y")
-        # En Alta Bilgi Notu
-        st.info(f"📅 **Rapor Tarihi:** {bugun} | 🧾 **Veri Kaynağı (Son Bilanço):** {self.son_bilanco_tarihi} (Çeyreklik Veri)")
+        st.info(f"📅 **Rapor Tarihi:** {bugun} | 🧾 **Veri Kaynağı (Son Bilanço):** {self.son_bilanco_tarihi} (Çeyreklik)")
 
         self.detayli_karne_ciz(bugun)
 
@@ -262,8 +248,10 @@ class StreamlitHisseAnaliz:
                 cell.set_text_props(weight='bold', color='white')
                 cell.set_facecolor('#333333')
         
+        # --- İMZA KISMI ---
         plt.figtext(0.5, 0.05, f"Analiz Tarihi: {bugun} | Dönem: {self.son_bilanco_tarihi}", ha="center", fontsize=9, color="gray")
-        plt.figtext(0.5, 0.02, "Powered by BorsaKarne", ha="center", fontsize=8, color="#0068c9", weight="bold")
+        # BURASI GÜNCELLENDİ:
+        plt.figtext(0.5, 0.02, "Powered by Sefer Mesut", ha="center", fontsize=9, color="#0068c9", weight="bold")
 
         st.pyplot(fig)
 
