@@ -5,15 +5,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --- SAYFA AYARLARI ---
-st.set_page_config(page_title="Borsa Karneleyici", page_icon="📈", layout="centered")
+st.set_page_config(page_title="Borsa Karne", page_icon="📈", layout="centered")
 
-st.title("📈 Evrensel Hisse Karneleyici")
-st.markdown("BIST veya ABD borsalarındaki hisselerin **Z-Score**, **Büyüme** ve **Değerleme** analizini yapar.")
+# --- BAŞLIK ALANI (Google Tarzı) ---
+st.markdown("<h1 style='text-align: center; color: #0068c9;'>📈 Borsa Karneleyici</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Hisse kodunu gir, saniyeler içinde Z-Score ve Bilanço Analizini gör.</p>", unsafe_allow_html=True)
 
-# --- KENAR ÇUBUĞU ---
-st.sidebar.header("Hisse Seçimi")
-hisse_kodu_giris = st.sidebar.text_input("Hisse Kodu (Örn: GZNMI, AAPL)", value="GZNMI").upper()
-analiz_butonu = st.sidebar.button("Analiz Et 🚀")
+st.write("") # Boşluk
+st.write("") # Boşluk
+
+# --- ARAMA ALANI (ANA EKRAN) ---
+# Arama kutusu ve butonu yan yana koymak için kolon kullanıyoruz
+col1, col2 = st.columns([3, 1]) 
+
+with col1:
+    hisse_kodu_giris = st.text_input("Hisse Kodu", value="", placeholder="Örn: GZNMI, THYAO, AAPL", label_visibility="collapsed").upper()
+
+with col2:
+    # Butonu kutuyla hizalamak için biraz boşluk bırakıyoruz
+    analiz_butonu = st.button("Analiz Et 🚀", type="primary", use_container_width=True)
+
+st.divider() # Araya şık bir çizgi
 
 class StreamlitHisseAnaliz:
     def __init__(self, hisse_kodu):
@@ -21,25 +33,32 @@ class StreamlitHisseAnaliz:
         self.symbol = ""
         self.currency = "TL"
         
-        with st.spinner(f'{hisse_kodu} verileri çekiliyor...'):
-            # --- AKILLI HİSSE BULMA ---
+        # Kullanıcı boş basarsa işlem yapma
+        if not hisse_kodu:
+            st.warning("Lütfen bir hisse kodu girin.")
+            self.hisse = None
+            return
+
+        with st.spinner(f'{hisse_kodu} taranıyor...'):
             try:
                 try_bist = f"{hisse_kodu}.IS"
                 hisse_bist = yf.Ticker(try_bist)
+                # BIST kontrolü
                 if not hisse_bist.history(period="5d").empty:
                     self.hisse = hisse_bist
                     self.symbol = try_bist
                     self.currency = "TRY"
-                    st.success(f"✅ BIST Hissesi Bulundu: {try_bist}")
+                    st.toast(f"✅ BIST Hissesi: {try_bist}", icon="🇹🇷")
                 else:
+                    # Global kontrol
                     hisse_global = yf.Ticker(hisse_kodu)
                     if not hisse_global.history(period="5d").empty:
                         self.hisse = hisse_global
                         self.symbol = hisse_kodu
                         self.currency = hisse_global.info.get('currency', 'USD')
-                        st.success(f"✅ Global Hisse Bulundu: {hisse_kodu}")
+                        st.toast(f"✅ Global Hisse: {hisse_kodu}", icon="🌍")
                     else:
-                        st.error("❌ Hisse bulunamadı!")
+                        st.error(f"❌ '{hisse_kodu}' bulunamadı! Kodu kontrol et.")
                         self.hisse = None
                         return
 
@@ -48,7 +67,7 @@ class StreamlitHisseAnaliz:
                 self.info = self.hisse.info
 
             except Exception as e:
-                st.error(f"Veri çekme hatası: {e}")
+                st.error(f"Bağlantı Hatası: {e}")
                 self.hisse = None
 
         self.kriterler = []
@@ -90,7 +109,6 @@ class StreamlitHisseAnaliz:
             toplam_varliklar = self.veri_getir(self.bs, ['Total Assets'])
             toplam_yukumluluk = self.veri_getir(self.bs, ['Total Liabilities Net Minority Interest', 'Total Liabilities'])
             ozkaynaklar = self.veri_getir(self.bs, ['Stockholders Equity', 'Total Equity Gross Minority Interest'])
-            finansal_borc = self.veri_getir(self.bs, ['Total Debt'])
             gecmis_yil_karlari = self.veri_getir(self.bs, ['Retained Earnings'])
 
             # --- HESAPLAMALAR ---
@@ -139,7 +157,7 @@ class StreamlitHisseAnaliz:
             self.rapor_olustur()
 
         except Exception as e:
-            st.error(f"Analiz Hatası: {e}")
+            st.error(f"Hesaplama Hatası: {e}")
 
     def kriter_ekle(self, ad, deger, esik, kategori, ters=False, format_tur="sayi"):
         if ters: basarili = deger < esik
@@ -164,33 +182,36 @@ class StreamlitHisseAnaliz:
         if basarili: self.puan += 1
 
     def rapor_olustur(self):
-        # SKOR KARTLARI
+        # ÜST BİLGİ KARTLARI
+        st.write("")
         col1, col2 = st.columns(2)
         col1.metric("Genel Puan", f"{self.puan} / {self.toplam_mumkun_puan}")
         
-        z_renk = "normal"
-        if self.z_score < 1.1: z_delta = "- Riskli"; z_renk="inverse"
+        z_renk = "off"
+        if self.z_score < 1.1: z_delta = "- Riskli"
         elif self.z_score > 2.6: z_delta = "+ Güvenli"
         else: z_delta = "İzle"
         
         col2.metric("Altman Z-Score", f"{self.z_score:.2f}", z_delta)
 
-        # TABLO GÖRSELLEŞTİRME (RENKLİ)
-        st.subheader("📊 Detaylı Analiz Tablosu")
+        # TABLO
+        st.subheader(f"📊 {self.hisse_kodu_saf} Analiz Raporu")
         
+        # DataFrame ile renkli tablo
         df = pd.DataFrame(self.kriterler)
-        
         def renk_ver(val):
-            color = '#d4edda' if val == "BAŞARILI" or val == "UCUZ" else '#f8d7da'
-            return f'background-color: {color}; color: black'
+            return 'background-color: #d1e7dd; color: black' if val in ["BAŞARILI", "UCUZ"] else 'background-color: #f8d7da; color: black'
 
-        st.dataframe(df.style.applymap(renk_ver, subset=['Durum']), use_container_width=True)
-
-        # GÖRSEL TABLO (Matplotlib)
+        st.dataframe(
+            df.style.applymap(renk_ver, subset=['Durum']),
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # KARNE GÖRSELİ
         self.detayli_karne_ciz()
 
     def detayli_karne_ciz(self):
-        # Matplotlib görselini Streamlit'e basma
         data = []
         renkler = []
         headers = ["KRİTER", "DEĞER", "HEDEF", "DURUM"]
@@ -203,8 +224,12 @@ class StreamlitHisseAnaliz:
 
         fig, ax = plt.subplots(figsize=(10, len(data) * 0.5 + 1.5))
         ax.axis('off')
+        
+        # Başlık ve Tablo
         table = ax.table(cellText=data, colLabels=headers, cellColours=renkler, loc='center', cellLoc='center', bbox=[0, 0, 1, 1])
         table.auto_set_font_size(False); table.set_fontsize(10)
+        
+        # Header Stili
         for (row, col), cell in table.get_celld().items():
             if row == 0:
                 cell.set_text_props(weight='bold', color='white')
@@ -212,7 +237,7 @@ class StreamlitHisseAnaliz:
         
         st.pyplot(fig)
 
-# --- UYGULAMAYI ÇALIŞTIR ---
+# --- ÇALIŞTIR ---
 if analiz_butonu:
     app = StreamlitHisseAnaliz(hisse_kodu_giris)
     app.analiz_yap()
