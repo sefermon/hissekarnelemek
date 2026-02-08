@@ -205,14 +205,24 @@ class StreamlitHisseAnaliz:
         else: z_delta = "İzle"
         col2.metric("Altman Z-Score", f"{self.z_score:.2f}", z_delta)
         
+        # --- BURASI DÜZELTİLDİ: DETAYLI AÇIKLAMA GERİ GELDİ ---
         with col2:
-            with st.expander("ℹ️ Z-Score Detayı"):
+            with st.expander("ℹ️ Z-Score Nedir?"):
                 st.markdown("""
                 **Altman Z-Skor**, iflas riskini ölçen bir formüldür.
+                
+                **Bileşenler:**
+                - **(T1) Likidite:** İşletme Sermayesi / Varlıklar
+                - **(T2) Birikmiş Kâr:** Geçmiş Kârlar / Varlıklar
+                - **(T3) Verimlilik:** FAVÖK / Varlıklar
+                - **(T4) Finansal Yapı:** Özkaynak / Borçlar
+                
+                **Bölgeler:**
                 - 🟢 **> 2.60:** Güvenli
                 - 🟡 **1.10 - 2.60:** Gri Bölge
                 - 🔴 **< 1.10:** Riskli
                 """)
+        # ----------------------------------------------------
 
         st.subheader(f"📊 {self.hisse_kodu_saf} Analiz Raporu")
         
@@ -250,8 +260,7 @@ class StreamlitHisseAnaliz:
         
         # --- İMZA KISMI ---
         plt.figtext(0.5, 0.05, f"Analiz Tarihi: {bugun} | Dönem: {self.son_bilanco_tarihi}", ha="center", fontsize=9, color="gray")
-        # BURASI GÜNCELLENDİ:
-        plt.figtext(0.5, 0.02, "Powered by Sefer Mesut", ha="center", fontsize=9, color="#0068c9", weight="bold")
+        plt.figtext(0.5, 0.02, "Gemini, Streamlit ve GitHub ile Sefer Mesut tarafından inşa edildi.", ha="center", fontsize=9, color="#0068c9", weight="bold")
 
         st.pyplot(fig)
 
