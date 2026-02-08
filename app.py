@@ -60,10 +60,8 @@ class StreamlitHisseAnaliz:
                 self.is_ = self.hisse.financials
                 self.info = self.hisse.info
                 
-                # SON BİLANÇO TARİHİNİ BULMA
-                # Balance Sheet sütun başlıkları genelde tarih objesidir
                 if not self.bs.empty:
-                    tarih_obj = self.bs.columns[0] # En güncel sütun
+                    tarih_obj = self.bs.columns[0]
                     self.son_bilanco_tarihi = tarih_obj.strftime("%d.%m.%Y")
                 else:
                     self.son_bilanco_tarihi = "Veri Yok"
@@ -187,12 +185,27 @@ class StreamlitHisseAnaliz:
         # ÜST BİLGİLER
         st.write("")
         col1, col2 = st.columns(2)
+        
+        # SOL: Genel Puan
         col1.metric("Genel Puan", f"{self.puan} / {self.toplam_mumkun_puan}")
         
+        # SAĞ: Altman Z-Score
         if self.z_score < 1.1: z_delta = "- Riskli"
         elif self.z_score > 2.6: z_delta = "+ Güvenli"
         else: z_delta = "İzle"
         col2.metric("Altman Z-Score", f"{self.z_score:.2f}", z_delta)
+        
+        # --- YENİ EKLENEN AÇIKLAMA (EXPANDER) ---
+        with col2:
+            with st.expander("Z-Score Nedir?"):
+                st.markdown("""
+                **Altman Z-Skor**, iflas riskini ölçen bir formüldür.
+                
+                - 🟢 **> 2.60 (Güvenli):** İflas riski düşük.
+                - 🟡 **1.10 - 2.60 (Gri):** Risk artıyor, izlenmeli.
+                - 🔴 **< 1.10 (Riskli):** İflas riski yüksek.
+                """)
+        # ----------------------------------------
 
         # TABLO
         st.subheader(f"📊 {self.hisse_kodu_saf} Analiz Raporu")
@@ -203,7 +216,7 @@ class StreamlitHisseAnaliz:
         
         # TARİH BİLGİLERİ (WEB)
         bugun = datetime.now().strftime("%d.%m.%Y")
-        st.caption(f"📅 **Analiz Tarihi:** {bugun} | 🧾 **Veri Kaynağı (Son Bilanço):** {self.son_bilanco_tarihi}")
+        st.caption(f"📅 **Analiz Tarihi:** {bugun} | 🧾 **Veri Kaynağı:** {self.son_bilanco_tarihi}")
         
         # GÖRSEL KARNE
         self.detayli_karne_ciz(bugun)
@@ -230,13 +243,7 @@ class StreamlitHisseAnaliz:
                 cell.set_text_props(weight='bold', color='white')
                 cell.set_facecolor('#333333')
         
-        # GÖRSELİN ALTINA İMZA VE TARİH EKLEME
         plt.figtext(0.5, 0.05, f"Analiz Tarihi: {bugun} | Bilanço Dönemi: {self.son_bilanco_tarihi}", ha="center", fontsize=9, color="gray")
         plt.figtext(0.5, 0.02, "Powered by BorsaKarne", ha="center", fontsize=8, color="#0068c9", weight="bold")
 
-        st.pyplot(fig)
-
-# --- ÇALIŞTIR ---
-if analiz_butonu:
-    app = StreamlitHisseAnaliz(hisse_kodu_giris)
-    app.analiz_yap()
+        st.pyplot(fig
